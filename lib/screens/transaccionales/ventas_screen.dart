@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../model/venta.dart';
 import '../../model/producto.dart';
@@ -91,20 +91,29 @@ class _VentasScreenState extends State<VentasScreen> {
   }
 
   void _cambiarEstado(Venta v) {
-    String estado = v.estado;
+    int estadoVentaId = v.estadoVentaId;
     showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setS) => AlertDialog(
       title: Text('Estado Venta #${v.id}'),
-      content: DropdownButtonFormField<String>(
-        value: estado,
+      content: DropdownButtonFormField<int>(
+        value: estadoVentaId,
         decoration: const InputDecoration(border: OutlineInputBorder()),
-        items: const [DropdownMenuItem(value: 'pendiente', child: Text('Pendiente')), DropdownMenuItem(value: 'pagada', child: Text('Pagada')), DropdownMenuItem(value: 'cancelada', child: Text('Cancelada'))],
-        onChanged: (val) => setS(() => estado = val!),
+        items: const [
+          DropdownMenuItem(value: 1, child: Text('Pendiente')),
+          DropdownMenuItem(value: 2, child: Text('Pagada')),
+          DropdownMenuItem(value: 3, child: Text('Cancelada')),
+        ],
+        onChanged: (val) => setS(() => estadoVentaId = val!),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
         FilledButton(onPressed: () async {
-          try { await context.read<VentaProvider>().actualizarEstado(v.id, estado); if (ctx.mounted) Navigator.pop(ctx); }
-          catch (e) { if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red)); }
+          try {
+            await context.read<VentaProvider>().actualizarEstado(v.id, estadoVentaId);
+            if (ctx.mounted) Navigator.pop(ctx);
+          }
+          catch (e) {
+            if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+          }
         }, child: const Text('Guardar')),
       ],
     )));

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../model/venta.dart';
 import '../services/venta_service.dart';
 
@@ -21,7 +21,7 @@ class VentaProvider extends ChangeNotifier {
     return res;
   }
 
-  Future<void> actualizarEstado(int id, String estado) async {
-    await _service.actualizarEstado(id, estado); await cargar();
+  Future<void> actualizarEstado(int id, int estadoVentaId) async {
+    await _service.actualizarEstado(id, estadoVentaId); await cargar();
   }
 }

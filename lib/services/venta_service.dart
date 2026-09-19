@@ -1,4 +1,4 @@
-﻿import '../core/api_client.dart';
+import '../core/api_client.dart';
 import '../model/venta.dart';
 
 class VentaService {
@@ -23,6 +23,6 @@ class VentaService {
     return res as Map<String, dynamic>;
   }
 
-  Future<void> actualizarEstado(int id, String estado) =>
-      ApiClient.put('/api/ventas/$id/estado', {'estado': estado});
+  Future<void> actualizarEstado(int id, int estadoVentaId) =>
+      ApiClient.put('/api/ventas/$id/estado', {'estado_venta_id': estadoVentaId});
 }

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../model/movimiento_inventario.dart';
 import '../../providers/movimiento_inventario_provider.dart';
@@ -47,7 +47,7 @@ class _MovimientosInventarioScreenState extends State<MovimientosInventarioScree
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
         FilledButton(onPressed: () async {
           if (prodId == null || tipoId == null) return;
-          final cant = int.tryParse(cantCtrl.text.trim()) ?? 0;
+          final cant = double.tryParse(cantCtrl.text.trim()) ?? 0.0;
           final mi = MovimientoInventario(id: 0, productoId: prodId!, tipoMovimientoId: tipoId!, cantidad: cant, referencia: refCtrl.text.trim().isEmpty ? null : refCtrl.text.trim());
           try {
             await context.read<MovimientoInventarioProvider>().crear(mi);

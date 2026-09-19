@@ -1,4 +1,4 @@
-﻿import '../core/api_client.dart';
+import '../core/api_client.dart';
 import '../model/detalle_compra.dart';
 
 class DetalleCompraService {
@@ -7,8 +7,8 @@ class DetalleCompraService {
     return data.map((e) => DetalleCompra.fromJson(e as Map<String, dynamic>)).toList();
   }
   Future<int> crear(DetalleCompra dc) async {
-    final res = await ApiClient.post('/api/detalle_compra', dc.toJson());
+    final res = await ApiClient.post('/api/detalles-compra', dc.toJson());
     return (res as Map<String, dynamic>)['id'] as int;
   }
-  Future<void> eliminar(int id) => ApiClient.delete('/api/detalle_compra/$id');
+  Future<void> eliminar(int id) => ApiClient.delete('/api/detalles-compra/$id');
 }
