@@ -301,6 +301,39 @@ class ApiClient {
   ) async {
     if (!_supportsOfflineStorage) return;
 
+    final table = EndpointTableRegistry.getTableForEndpoint(path);
+    if (table != null) {
+      if (method == 'POST' && body != null) {
+        final id = decoded is Map<String, dynamic> ? decoded['id'] : null;
+        final intId = id != null ? int.tryParse(id.toString()) : null;
+        final row = EndpointTableRegistry.apiJsonToSqliteMap(
+          table,
+          {...body, if (intId != null) 'id': intId},
+          localId: intId,
+          isSynced: true,
+          syncAction: 'none',
+        );
+        await _offlineDb.insertEntity(table, row);
+      } else if (method == 'PUT' && body != null) {
+        final id = _idFromPath(path);
+        if (id != null) {
+          final row = EndpointTableRegistry.apiJsonToSqliteMap(
+            table,
+            body,
+            localId: id,
+            isSynced: true,
+            syncAction: 'none',
+          );
+          await _offlineDb.updateEntity(table, id, row);
+        }
+      } else if (method == 'DELETE') {
+        final id = _idFromPath(path);
+        if (id != null) {
+          await _offlineDb.deleteEntity(table, id, softDelete: false);
+        }
+      }
+    }
+
     if (method == 'POST' && body != null) {
       final id = decoded is Map<String, dynamic> ? decoded['id'] : null;
       if (id == null) return;
@@ -321,6 +354,49 @@ class ApiClient {
     PendingOperation operation,
     dynamic decoded,
   ) async {
+    final table = EndpointTableRegistry.getTableForEndpoint(operation.path);
+    if (table != null) {
+      if (operation.method == 'POST') {
+        final remoteId = decoded is Map<String, dynamic> && decoded['id'] != null
+            ? int.tryParse(decoded['id'].toString())
+            : null;
+        if (operation.localId != null && remoteId != null) {
+          await _offlineDb.markEntitySynced(table, operation.localId!, remoteId);
+          if (table == SqliteTables.ventas) {
+            await _offlineDb.updateForeignKeyReference(
+              table: SqliteTables.detallesVenta,
+              foreignKeyColumn: 'venta_id',
+              oldId: operation.localId!,
+              newId: remoteId,
+            );
+            await _offlineDb.updateForeignKeyReference(
+              table: SqliteTables.pagos,
+              foreignKeyColumn: 'venta_id',
+              oldId: operation.localId!,
+              newId: remoteId,
+            );
+          } else if (table == SqliteTables.compras) {
+            await _offlineDb.updateForeignKeyReference(
+              table: SqliteTables.detallesCompra,
+              foreignKeyColumn: 'compra_id',
+              oldId: operation.localId!,
+              newId: remoteId,
+            );
+          }
+        }
+      } else if (operation.method == 'PUT') {
+        final id = _idFromPath(operation.path) ?? operation.localId;
+        if (id != null) {
+          await _offlineDb.markEntitySynced(table, id, id);
+        }
+      } else if (operation.method == 'DELETE') {
+        final id = _idFromPath(operation.path);
+        if (id != null) {
+          await _offlineDb.deleteEntity(table, id, softDelete: false);
+        }
+      }
+    }
+
     if (operation.method != 'POST' || operation.localId == null) return;
 
     final body = _mapFromJson(operation.body) ?? <String, dynamic>{};
