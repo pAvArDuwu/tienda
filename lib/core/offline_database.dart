@@ -1,6 +1,9 @@
+﻿import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path/path.dart' as path;
 import 'package:sqflite/sqflite.dart';
 import 'sqlite_models.dart';
+import 'web_storage.dart';
 
 class PendingOperation {
   final int id;
@@ -32,6 +35,16 @@ class PendingOperation {
       lastError: row['last_error'] as String?,
     );
   }
+
+  Map<String, Object?> toMap() => {
+    'id': id,
+    'method': method,
+    'path': path,
+    'body': body,
+    'local_id': localId,
+    'attempts': attempts,
+    'last_error': lastError,
+  };
 }
 
 class OfflineDatabase {
@@ -40,6 +53,64 @@ class OfflineDatabase {
   static final OfflineDatabase instance = OfflineDatabase._();
 
   Database? _database;
+
+  // Web in-memory / localStorage cache
+  final Map<String, List<Map<String, Object?>>> _webTables = {};
+  final Map<String, String> _webResponseCache = {};
+  List<PendingOperation> _webPendingOps = [];
+  int _webPendingIdCounter = 1;
+  bool _webInitialized = false;
+
+  void _initWeb() {
+    if (_webInitialized) return;
+    _webInitialized = true;
+    try {
+      final opsJson = webGetItem('tienda_pending_operations');
+      if (opsJson != null) {
+        final list = jsonDecode(opsJson) as List;
+        _webPendingOps = list
+            .map((e) => PendingOperation.fromRow(Map<String, Object?>.from(e as Map)))
+            .toList();
+        if (_webPendingOps.isNotEmpty) {
+          _webPendingIdCounter = _webPendingOps.map((o) => o.id).reduce((a, b) => a > b ? a : b) + 1;
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _persistWebPendingOps() {
+    try {
+      final list = _webPendingOps.map((o) => o.toMap()).toList();
+      webSetItem('tienda_pending_operations', jsonEncode(list));
+    } catch (_) {}
+  }
+
+  List<Map<String, Object?>> _getWebTable(String table) {
+    _initWeb();
+    if (!_webTables.containsKey(table)) {
+      final jsonStr = webGetItem('tienda_tbl_$table');
+      if (jsonStr != null) {
+        try {
+          final list = jsonDecode(jsonStr) as List;
+          _webTables[table] = list
+              .map((e) => Map<String, Object?>.from(e as Map))
+              .toList();
+        } catch (_) {
+          _webTables[table] = [];
+        }
+      } else {
+        _webTables[table] = [];
+      }
+    }
+    return _webTables[table]!;
+  }
+
+  void _persistWebTable(String table) {
+    try {
+      final list = _webTables[table] ?? [];
+      webSetItem('tienda_tbl_$table', jsonEncode(list));
+    } catch (_) {}
+  }
 
   Future<Database> get _db async {
     final current = _database;
@@ -93,14 +164,30 @@ class OfflineDatabase {
   }
 
   // ---------------------------------------------------------------------------
-  // Operaciones estructuradas por modelo en SQLite
+  // Operaciones estructuradas por modelo en SQLite / Web
   // ---------------------------------------------------------------------------
 
-  /// Guarda una lista de registros recibidos de la API en la tabla SQLite local correspondiente.
   Future<void> saveEntitiesFromApi(
     String table,
     List<Map<String, dynamic>> items,
   ) async {
+    if (kIsWeb) {
+      final list = _getWebTable(table);
+      for (final item in items) {
+        final sqliteMap = EndpointTableRegistry.apiJsonToSqliteMap(
+          table,
+          item,
+          isSynced: true,
+          syncAction: 'none',
+        );
+        final id = sqliteMap['id'];
+        list.removeWhere((e) => e['id'] == id);
+        list.add(sqliteMap);
+      }
+      _persistWebTable(table);
+      return;
+    }
+
     final db = await _db;
     final batch = db.batch();
     for (final item in items) {
@@ -119,8 +206,14 @@ class OfflineDatabase {
     await batch.commit(noResult: true);
   }
 
-  /// Retorna todos los registros activos (que no estén marcados para eliminación offline)
   Future<List<Map<String, Object?>>> getAllEntities(String table) async {
+    if (kIsWeb) {
+      final list = _getWebTable(table);
+      final result = list.where((e) => e['sync_action'] != 'delete').toList();
+      result.sort((a, b) => ((a['id'] as num?) ?? 0).compareTo((b['id'] as num?) ?? 0));
+      return result;
+    }
+
     final db = await _db;
     return db.query(
       table,
@@ -129,8 +222,16 @@ class OfflineDatabase {
     );
   }
 
-  /// Retorna un registro por su ID
   Future<Map<String, Object?>?> getEntityById(String table, int id) async {
+    if (kIsWeb) {
+      final list = _getWebTable(table);
+      try {
+        return list.firstWhere((e) => e['id'] == id && e['sync_action'] != 'delete');
+      } catch (_) {
+        return null;
+      }
+    }
+
     final db = await _db;
     final rows = await db.query(
       table,
@@ -142,24 +243,59 @@ class OfflineDatabase {
     return rows.first;
   }
 
-  /// Inserta un registro localmente
   Future<int> insertEntity(String table, Map<String, Object?> row) async {
+    if (kIsWeb) {
+      final list = _getWebTable(table);
+      final id = row['id'];
+      list.removeWhere((e) => e['id'] == id);
+      list.add(Map<String, Object?>.from(row));
+      _persistWebTable(table);
+      return 1;
+    }
+
     final db = await _db;
     return db.insert(table, row, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  /// Actualiza un registro localmente
   Future<int> updateEntity(
     String table,
     int id,
     Map<String, Object?> row,
   ) async {
+    if (kIsWeb) {
+      final list = _getWebTable(table);
+      final index = list.indexWhere((e) => e['id'] == id);
+      if (index != -1) {
+        list[index] = {...list[index], ...row};
+        _persistWebTable(table);
+        return 1;
+      }
+      return 0;
+    }
+
     final db = await _db;
     return db.update(table, row, where: 'id = ?', whereArgs: [id]);
   }
 
-  /// Elimina un registro localmente
   Future<int> deleteEntity(String table, int id, {bool softDelete = false}) async {
+    if (kIsWeb) {
+      final list = _getWebTable(table);
+      if (softDelete && id > 0) {
+        final index = list.indexWhere((e) => e['id'] == id);
+        if (index != -1) {
+          list[index]['sync_action'] = 'delete';
+          list[index]['is_synced'] = 0;
+          _persistWebTable(table);
+          return 1;
+        }
+      } else {
+        list.removeWhere((e) => e['id'] == id);
+        _persistWebTable(table);
+        return 1;
+      }
+      return 0;
+    }
+
     final db = await _db;
     if (softDelete && id > 0) {
       return db.update(
@@ -172,15 +308,30 @@ class OfflineDatabase {
     return db.delete(table, where: 'id = ?', whereArgs: [id]);
   }
 
-  /// Actualiza el ID temporal asignado offline con el ID remoto devuelto por el servidor
   Future<void> markEntitySynced(
     String table,
     int localId,
     int? remoteId,
   ) async {
+    if (kIsWeb) {
+      final list = _getWebTable(table);
+      final index = list.indexWhere((e) => e['id'] == localId);
+      if (index != -1) {
+        final item = Map<String, Object?>.from(list[index]);
+        if (remoteId != null && remoteId != localId) {
+          item['id'] = remoteId;
+          item['remote_id'] = remoteId;
+        }
+        item['is_synced'] = 1;
+        item['sync_action'] = 'none';
+        list[index] = item;
+        _persistWebTable(table);
+      }
+      return;
+    }
+
     final db = await _db;
     if (remoteId != null && remoteId != localId) {
-      // Eliminar el registro antiguo con id local temporal y volver a insertar con nuevo id
       final rows = await db.query(table, where: 'id = ?', whereArgs: [localId]);
       if (rows.isNotEmpty) {
         final updated = Map<String, Object?>.from(rows.first);
@@ -206,13 +357,23 @@ class OfflineDatabase {
     }
   }
 
-  /// Reemplaza referencias de clave foránea cuando se obtiene el ID remoto
   Future<void> updateForeignKeyReference({
     required String table,
     required String foreignKeyColumn,
     required int oldId,
     required int newId,
   }) async {
+    if (kIsWeb) {
+      final list = _getWebTable(table);
+      for (final item in list) {
+        if (item[foreignKeyColumn] == oldId) {
+          item[foreignKeyColumn] = newId;
+        }
+      }
+      _persistWebTable(table);
+      return;
+    }
+
     final db = await _db;
     await db.update(
       table,
@@ -222,8 +383,12 @@ class OfflineDatabase {
     );
   }
 
-  /// Retorna los registros que aún no se han sincronizado
   Future<List<Map<String, Object?>>> getUnsyncedEntities(String table) async {
+    if (kIsWeb) {
+      final list = _getWebTable(table);
+      return list.where((e) => e['is_synced'] == 0).toList();
+    }
+
     final db = await _db;
     return db.query(
       table,
@@ -237,6 +402,11 @@ class OfflineDatabase {
   // ---------------------------------------------------------------------------
 
   Future<String?> cachedResponse(String requestPath) async {
+    if (kIsWeb) {
+      _initWeb();
+      return _webResponseCache[requestPath] ?? webGetItem('tienda_cache_$requestPath');
+    }
+
     final db = await _db;
     final rows = await db.query(
       'response_cache',
@@ -250,6 +420,13 @@ class OfflineDatabase {
   }
 
   Future<void> saveResponse(String requestPath, String body) async {
+    if (kIsWeb) {
+      _initWeb();
+      _webResponseCache[requestPath] = body;
+      webSetItem('tienda_cache_$requestPath', body);
+      return;
+    }
+
     final db = await _db;
     await db.insert('response_cache', {
       'path': requestPath,
@@ -264,6 +441,23 @@ class OfflineDatabase {
     required String? body,
     int? localId,
   }) async {
+    if (kIsWeb) {
+      _initWeb();
+      final id = _webPendingIdCounter++;
+      final op = PendingOperation(
+        id: id,
+        method: method,
+        path: requestPath,
+        body: body,
+        localId: localId,
+        attempts: 0,
+        lastError: null,
+      );
+      _webPendingOps.add(op);
+      _persistWebPendingOps();
+      return id;
+    }
+
     final db = await _db;
     return db.insert('pending_operations', {
       'method': method,
@@ -277,6 +471,25 @@ class OfflineDatabase {
   }
 
   Future<void> setOperationLocalId(int id, int localId) async {
+    if (kIsWeb) {
+      _initWeb();
+      final index = _webPendingOps.indexWhere((o) => o.id == id);
+      if (index != -1) {
+        final o = _webPendingOps[index];
+        _webPendingOps[index] = PendingOperation(
+          id: o.id,
+          method: o.method,
+          path: o.path,
+          body: o.body,
+          localId: localId,
+          attempts: o.attempts,
+          lastError: o.lastError,
+        );
+        _persistWebPendingOps();
+      }
+      return;
+    }
+
     final db = await _db;
     await db.update(
       'pending_operations',
@@ -287,12 +500,22 @@ class OfflineDatabase {
   }
 
   Future<List<PendingOperation>> pendingOperations() async {
+    if (kIsWeb) {
+      _initWeb();
+      return List.unmodifiable(_webPendingOps);
+    }
+
     final db = await _db;
     final rows = await db.query('pending_operations', orderBy: 'id ASC');
     return rows.map(PendingOperation.fromRow).toList();
   }
 
   Future<int> pendingCount() async {
+    if (kIsWeb) {
+      _initWeb();
+      return _webPendingOps.length;
+    }
+
     final db = await _db;
     final rows = await db.rawQuery(
       'SELECT COUNT(*) AS total FROM pending_operations',
@@ -301,11 +524,37 @@ class OfflineDatabase {
   }
 
   Future<void> deleteOperation(int id) async {
+    if (kIsWeb) {
+      _initWeb();
+      _webPendingOps.removeWhere((o) => o.id == id);
+      _persistWebPendingOps();
+      return;
+    }
+
     final db = await _db;
     await db.delete('pending_operations', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> markOperationFailed(int id, String error) async {
+    if (kIsWeb) {
+      _initWeb();
+      final index = _webPendingOps.indexWhere((o) => o.id == id);
+      if (index != -1) {
+        final o = _webPendingOps[index];
+        _webPendingOps[index] = PendingOperation(
+          id: o.id,
+          method: o.method,
+          path: o.path,
+          body: o.body,
+          localId: o.localId,
+          attempts: o.attempts + 1,
+          lastError: error,
+        );
+        _persistWebPendingOps();
+      }
+      return;
+    }
+
     final db = await _db;
     await db.rawUpdate(
       '''

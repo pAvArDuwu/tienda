@@ -117,3 +117,4 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
     );
   }
 }
+

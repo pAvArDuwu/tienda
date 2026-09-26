@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../model/producto.dart';
 import '../../providers/producto_provider.dart';
@@ -62,9 +62,9 @@ class _ProductosScreenState extends State<ProductosScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
-                  value: catProv.items.any((c) => c.id == selectedCat) ? selectedCat : null,
+                  value: catProv.items.any((c) => c.id == selectedCat) ? selectedCat : (catProv.items.isNotEmpty ? catProv.items.first.id : null),
                   decoration: const InputDecoration(
-                    labelText: 'Categoría *',
+                    labelText: 'CategorÃ­a *',
                     border: OutlineInputBorder(),
                   ),
                   items: catProv.items.map((c) => DropdownMenuItem(
@@ -77,7 +77,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
-                  value: umProv.items.any((u) => u.id == selectedUm) ? selectedUm : null,
+                  value: umProv.items.any((u) => u.id == selectedUm) ? selectedUm : (umProv.items.isNotEmpty ? umProv.items.first.id : null),
                   decoration: const InputDecoration(
                     labelText: 'Unidad de Medida *',
                     border: OutlineInputBorder(),
@@ -164,10 +164,10 @@ class _ProductosScreenState extends State<ProductosScreen> {
                   context: context,
                   builder: (_) => AlertDialog(
                     title: const Text('Eliminar'),
-                    content: Text('¿Eliminar "${p.nombre}"?'),
+                    content: Text('Â¿Eliminar "${p.nombre}"?'),
                     actions: [
                       TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
-                      FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sí')),
+                      FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('SÃ­')),
                     ],
                   ),
                 );
@@ -190,3 +190,4 @@ class _ProductosScreenState extends State<ProductosScreen> {
     }),
   );
 }
+

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/api_client.dart';
 
@@ -96,10 +96,10 @@ class _AppShellState extends State<AppShell> {
 
   // Sub-indices por seccion
   final List<String> _paramTitles = [
-    'Categorías',
+    'CategorÃ­as',
     'Estados Compra',
     'Estados Venta',
-    'Métodos Pago',
+    'MÃ©todos Pago',
     'Tipos Movimiento',
     'Unidades Medida',
   ];
@@ -174,62 +174,7 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Widget _buildOfflineBanner() {
-    return ValueListenableBuilder<OfflineSyncStatus>(
-      valueListenable: ApiClient.syncStatus,
-      builder: (context, status, _) {
-        if (!status.hasNotice) return const SizedBox.shrink();
-
-        final colorScheme = Theme.of(context).colorScheme;
-        final background = status.online
-            ? colorScheme.tertiaryContainer
-            : colorScheme.errorContainer;
-        final foreground = status.online
-            ? colorScheme.onTertiaryContainer
-            : colorScheme.onErrorContainer;
-        final icon = status.syncing
-            ? Icons.sync
-            : status.online
-            ? Icons.cloud_queue
-            : Icons.cloud_off_outlined;
-
-        return Container(
-          width: double.infinity,
-          color: background,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              Icon(icon, size: 18, color: foreground),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  status.label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              if (status.pendingOperations > 0)
-                TextButton.icon(
-                  onPressed: ApiClient.syncPendingOperations,
-                  icon: const Icon(Icons.upload_outlined, size: 16),
-                  label: const Text('Subir'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: foreground,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
+  Widget _buildOfflineBanner() => const SizedBox.shrink();
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -283,7 +228,7 @@ class _AppShellState extends State<AppShell> {
           NavigationDestination(
             icon: Icon(Icons.tune_outlined),
             selectedIcon: Icon(Icons.tune),
-            label: 'Parámetros',
+            label: 'ParÃ¡metros',
           ),
           NavigationDestination(
             icon: Icon(Icons.store_outlined),
@@ -300,3 +245,4 @@ class _AppShellState extends State<AppShell> {
     );
   }
 }
+

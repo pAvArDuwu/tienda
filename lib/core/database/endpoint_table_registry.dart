@@ -1,4 +1,4 @@
-import 'tables.dart';
+﻿import 'tables.dart';
 
 /// Registro de mapeo entre rutas de endpoints de API y nombres de tablas SQLite.
 class EndpointTableRegistry {
@@ -30,7 +30,7 @@ class EndpointTableRegistry {
     return null;
   }
 
-  /// Convierte un mapa recibido de la API a formato SQLite según la tabla
+  /// Convierte un mapa recibido de la API a formato SQLite segÃºn la tabla
   static Map<String, Object?> apiJsonToSqliteMap(
     String table,
     Map<String, dynamic> json, {
@@ -59,7 +59,7 @@ class EndpointTableRegistry {
           : 0;
     }
 
-    // Normalizar numéricos
+    // Normalizar numÃ©ricos
     if (map.containsKey('precio')) {
       map['precio'] = (map['precio'] as num?)?.toDouble() ?? 0.0;
     }
@@ -84,7 +84,7 @@ class EndpointTableRegistry {
       map['monto'] = (map['monto'] as num?)?.toDouble() ?? 0.0;
     }
 
-    // Flags de sincronización
+    // Flags de sincronizaciÃ³n
     map['is_synced'] = isSynced ? 1 : 0;
     map['sync_action'] = syncAction;
     map['remote_id'] =
@@ -100,16 +100,11 @@ class EndpointTableRegistry {
   ) {
     final json = Map<String, dynamic>.from(map);
 
-    // Remover campos internos de SQLite y sincronización
+    // Remover campos internos de SQLite y sincronizaciÃ³n
     json.remove('is_synced');
     json.remove('sync_action');
     json.remove('remote_id');
 
-    // Si el ID es negativo (ID temporal offline), no se envía en el POST al servidor
-    final id = json['id'];
-    if (id is int && id < 0) {
-      json.remove('id');
-    }
 
     // Convertir int de SQLite a bool si aplica
     if (json.containsKey('activo')) {
@@ -119,3 +114,4 @@ class EndpointTableRegistry {
     return json;
   }
 }
+

@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -16,7 +16,7 @@ class ApiClient {
   static bool _syncing = false;
   static Timer? _syncTimer;
 
-  static bool get _supportsOfflineStorage => !kIsWeb;
+  static bool get _supportsOfflineStorage => true;
 
   static String get _base => AppConstants.baseUrl;
 
@@ -157,10 +157,6 @@ class ApiClient {
   }
 
   static Future<dynamic> _cachedGetOrThrow(String path, Object error) async {
-    if (!_supportsOfflineStorage) {
-      throw const ApiException('Sin conexion.', 0);
-    }
-
     final table = EndpointTableRegistry.getTableForEndpoint(path);
     if (table != null) {
       final id = _idFromPath(path);
@@ -170,23 +166,19 @@ class ApiClient {
           await _updateStatus(
             online: false,
             usingOfflineData: true,
-            message: 'Mostrando datos locales (SQLite).',
           );
           return EndpointTableRegistry.sqliteMapToApiJson(table, entity);
         }
       } else {
         final localEntities = await _offlineDb.getAllEntities(table);
-        if (localEntities.isNotEmpty) {
-          final apiItems = localEntities
-              .map((row) => EndpointTableRegistry.sqliteMapToApiJson(table, row))
-              .toList();
-          await _updateStatus(
-            online: false,
-            usingOfflineData: true,
-            message: 'Mostrando datos locales (SQLite).',
-          );
-          return apiItems;
-        }
+        final apiItems = localEntities
+            .map((row) => EndpointTableRegistry.sqliteMapToApiJson(table, row))
+            .toList();
+        await _updateStatus(
+          online: false,
+          usingOfflineData: true,
+        );
+        return apiItems;
       }
     }
 
@@ -195,22 +187,16 @@ class ApiClient {
       await _updateStatus(
         online: false,
         usingOfflineData: true,
-        message: 'Mostrando datos locales.',
       );
       return _decodeBody(cached);
     }
 
     await _updateStatus(
       online: false,
-      usingOfflineData: false,
-      message: 'Sin conexion y sin datos locales.',
+      usingOfflineData: true,
     );
-    throw ApiException(
-      'Sin conexion y sin datos locales para esta pantalla.',
-      0,
-    );
+    return [];
   }
-
   static Future<dynamic> _queueOfflineMutation(
     String method,
     String path,
@@ -264,7 +250,7 @@ class ApiClient {
     );
 
     if (method == 'POST') {
-      return _localEntityFor(path, body ?? <String, dynamic>{}, localId!);
+      return await _localEntityFor(path, body ?? <String, dynamic>{}, localId!);
     }
     return null;
   }
